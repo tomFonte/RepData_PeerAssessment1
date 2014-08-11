@@ -1,20 +1,131 @@
+---
+output: html_document
+---
 # Reproducible Research: Peer Assessment 1
 
 
 ## Loading and preprocessing the data
+```{r,echo=FALSE}
+setwd("F:\\Coursera\\Data Science Certificadte\\Reproducible Research\\Assignment 1")
+#fileUrl<-"https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2Factivity.zip"
+#download.file(fileUrl,destfile="./Activity.zip")
+#unzip("./Activity.zip")
+```
 
+Before we can start, we need to set our working directory with the `setwd()` function, download the file and unzip it. The address from which we will obtain the data is:
+`fileUrl<-"https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2Factivity.zip"`
+we need to download the file, for which we can use the following function:
+`download.file(fileUrl,destfile="./Activity.zip")`
+And as it is a `.zip` file, we need to unzip it using:
+`unzip("./Activity.zip")`
+Finally we can see what names have the files we unloaded with
+`dir()`
 
+After downloading the data, unzip it and setting the workdirectory, we can read it into R
+```{r,echo=TRUE}
+Activity<-read.csv("./Activity.csv")
+head(Activity)
+```
+Before making any analysis we must understand the type of elements in each variable:
+```{r,echo=TRUE}
+str(Activity)
+```
+As we can see, second variable "date" is represented as a Factor, which will lead to misunderstandings. Before continuing it is imperative to transform it into a "Date" class. It is worth mentioning that the format in which it is shown is "yyyy/mm/dd", so I will maintain this.
+```{r,echo=TRUE}
+Date<-as.Date(Activity$date,"%Y-%m-%d")
+Activity$Date<-Date
+df<-Activity[complete.cases(Activity),]
+```
+This way `df` only has complete cases, without any imputations made to the data.
 
 ## What is mean total number of steps taken per day?
 
-
+As we need the total number of steps, we have to sum the steps over the days.
+```{r,echo=TRUE}
+AggregatedSteps<-aggregate(steps~Date,df,sum)
+hist(AggregatedSteps$steps,main='Steps per day',xlab='Steps')
+mean(AggregatedSteps$steps)
+```
+```{r,echo=TRUE}
+median(AggregatedSteps$steps)
+```
+As we can see, the mean and the median are very close, which indicates a simetric distribution.
 
 ## What is the average daily activity pattern?
 
+```{r,echo=TRUE}
+MeanSteps<-aggregate(steps~interval,df,mean)
+plot(MeanSteps$interval,MeanSteps$steps,type='l',xlab='interval',ylab='steps')
+```
+
+
+```{r,echo=TRUE}
+MeanSteps[which.max(MeanSteps$steps),]
+```
+The interval 835 has the maximum number of steps in average, which is 206.5 steps.
 
 
 ## Imputing missing values
 
+```{r,echo=TRUE}
+nrow(Activity[!complete.cases(Activity),])
+```
 
+
+Considering that both values of mean and median are similar, even as the median is more robust than the mean, it generates error when calling the function, so my strategy will be identify the rows in which an NA is present and substitute it by the mean of the 5-minute interval.
+
+
+```{r,echo=TRUE}
+#duplicate dataframe so we will have the original and a second one with the imputed values
+Activity2<-Activity
+
+for(i in 1:nrow(Activity2)){
+        if(is.na(Activity2$steps[i])){
+                WhichInterval<-Activity2$interval[i]
+                rowID<-which(MeanSteps$interval==WhichInterval)
+                missingSteps<-MeanSteps$steps[rowID]
+                Activity2$steps[i]<-missingSteps
+                }
+        }
+```
+
+
+```{r,echo=TRUE}
+ImputedTotal<-aggregate(steps~Date,Activity2,sum)
+hist(ImputedTotal$steps,xlab='steps',main='Histogram of imputed steps')
+mean(AggregatedSteps$steps);mean(ImputedTotal$steps)
+median(AggregatedSteps$steps);median(ImputedTotal$steps)
+```
 
 ## Are there differences in activity patterns between weekdays and weekends?
+
+```{r,echo=TRUE}
+aux<-weekdays(Activity2$Date)
+
+day<-rep("weekday", length(aux))
+for(i in 1:length(aux)){
+        if(aux[i]=="Saturday"||aux[i]=="Sunday"){
+                day[i]<-"weekend"
+                }
+        }
+Activity2$Day_Type<-as.factor(day) # Adds the column with variable 'days' as factor to the dataframe
+```
+
+
+```{r,echo=TRUE}
+aggregatedDays<-aggregate(steps~interval+Day_Type,Activity2,mean)
+par(mfrow=c(1,2))
+plot(aggregatedDays$interval[aggregatedDays$Day_Type=='weekday'],
+     aggregatedDays$steps[aggregatedDays$Day_Type=='weekday'],
+     ylab='steps',xlab='interval',type='l',
+     main='steps per inverval in weekday')
+plot(aggregatedDays$interval[aggregatedDays$Day_Type=='weekend'],
+     aggregatedDays$steps[aggregatedDays$Day_Type=='weekend'],
+     ylab='steps',xlab='interval',type='l',
+     main='steps per inverval in weekend')
+
+#remove from memory the datasets to free memory:
+rm(list = ls())
+```
+
+As we can see in these graphs, there is difference in the activity patterns between weekdays and weekends.
